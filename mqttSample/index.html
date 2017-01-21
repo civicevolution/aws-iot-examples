@@ -13,6 +13,29 @@
     </div>
     <div class="row">
       <div class="col-md-6">
+        <div class="input-group">
+          <label for="email">Email: </label>
+          <input type="text" class="form-control" id="email" ng-model="vm.email" />
+        </div>
+        <div class="input-group">
+          <label for="password">Password: </label>
+          <input type="password" class="form-control" id="password" ng-model="vm.password"/>
+        </div>
+        <div class="form-group">
+          <button class="btn btn-primary" ng-click="vm.signin()" ng-disabled="!vm.email || !vm.password">Sign in</button>
+        </div>
+        <div class="form-group">
+          <p>Cognito user name: {{vm.first_name}} {{vm.last_name}}</p>
+          <p>Cognito identityId: {{vm.identityId}}</p>
+          <p>Cognito accessKey: {{vm.accessKey}}</p>
+          <p>Cognito secretKey: {{vm.secretKey}}</p>
+          <p>Cognito sessionToken: {{vm.sessionToken}}</p>
+        </div>
+
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-6">
         <div class="form-group">
           <label for="endpoint">Endpoint: </label>
           <input type="text" class="form-control" id="endpoint" placeholder="EndPoint" ng-model="vm.endpoint">
@@ -27,14 +50,14 @@
           <label for="clientId">Client id: </label>
           <input type="text" class="form-control" id="clientId" ng-model="vm.clientId" />
         </div>
-        <div class="input-group">
-          <label for="accessKey">Access key: </label>
-          <input type="text" class="form-control" id="accessKey" placeholder="AWS access key" ng-model="vm.accessKey"/>
-        </div>
-        <div class="form-group">
-          <label for="secretKey">Secret Key: </label>
-          <input type="password" class="form-control" id="secretKey" placeholder="AWS secret key" ng-model="vm.secretKey">
-        </div>
+        <!--<div class="input-group">-->
+          <!--<label for="accessKey">Access key: </label>-->
+          <!--<input type="text" class="form-control" id="accessKey" placeholder="AWS access key" ng-model="vm.accessKey"/>-->
+        <!--</div>-->
+        <!--<div class="form-group">-->
+          <!--<label for="secretKey">Secret Key: </label>-->
+          <!--<input type="password" class="form-control" id="secretKey" placeholder="AWS secret key" ng-model="vm.secretKey">-->
+        <!--</div>-->
       </div>
     </div>
     <div class="row">
@@ -82,10 +105,23 @@
     </div>
   </div>
 </body>
-<script type="text/javascript" src="./bower_components/moment/min/moment.min.js"></script>
-<script type="text/javascript" src="./bower_components/angular/angular.min.js"></script>
-<script type="text/javascript" src="./bower_components/paho-mqtt-js/mqttws31.js"></script>
-<script type="text/javascript" src="./bower_components/cryptojslib/rollups/sha256.js"></script>
-<script type="text/javascript" src="./bower_components/cryptojslib/rollups/hmac-sha256.js"></script>
-<script type="text/javascript" src="./js/app.js"></script>
+  <script type="text/javascript" src="./bower_components/moment/min/moment.min.js"></script>
+  <script type="text/javascript" src="./bower_components/angular/angular.min.js"></script>
+  <script type="text/javascript" src="./bower_components/paho-mqtt-js/mqttws31.js"></script>
+  <script type="text/javascript" src="./bower_components/cryptojslib/rollups/sha256.js"></script>
+  <script type="text/javascript" src="./bower_components/cryptojslib/rollups/hmac-sha256.js"></script>
+
+  <script type="text/javascript" src="./js/aws/jsbn.js"></script>
+  <script type="text/javascript" src="./js/aws/jsbn2.js"></script>
+  <script type="text/javascript" src="./js/aws/sjcl.js"></script>
+  <script type="text/javascript" src="./js/sigv4utils.js"></script>
+
+  <!--<script type="text/javascript" src="./js/aws/aws-cognito-sdk.js"></script>-->
+  <!--<script type="text/javascript" src="./js/aws/amazon-cognito-identity.min.js"></script>-->
+  <script type="text/javascript" src="./js/aws/aws-cognito-sdk-1-20-17.js"></script>
+  <script type="text/javascript" src="./js/aws/amazon-cognito-identity-1-20-17.min.js"></script>
+  <!--<script type="text/javascript" src="./js/aws/aws-sdk-2.7.27.js"></script>-->
+
+
+  <script type="text/javascript" src="./js/app.js"></script>
 </html>

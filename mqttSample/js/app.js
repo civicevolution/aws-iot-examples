@@ -48,17 +48,22 @@ or in the "license" file accompanying this file. This file is distributed on an 
   }
 
   /** controller of the app */
-  function AppController(scope){
-    this.clientId = 'someClientId';
-    this.endpoint = null;
-    this.accessKey = null;
-    this.secretKey = null;
-    this.regionName = 'us-east-1';
+  function AppController(scope, $q, $timeout){
+    this.email = '';
+    this.password = 'X';
+    this.clientId = 'X';
+    this.endpoint = 'X';
+    this.accessKey = '';
+    this.secretKey = '';
+    this.sessionToken = '';
+    this.regionName = 'X';
     this.logs = new LogService();
     this.clients = new ClientControllerCache(scope, this.logs);
+    this.$q = $q;
+    this.$timeout = $timeout;
   }
 
-  AppController.$inject = ['$scope'];
+  AppController.$inject = ['$scope', '$q', '$timeout'];
 
   AppController.prototype.createClient = function() {
     var options = {
@@ -66,13 +71,178 @@ or in the "license" file accompanying this file. This file is distributed on an 
       endpoint: this.endpoint.toLowerCase(),
       accessKey: this.accessKey,
       secretKey: this.secretKey,
-      regionName: this.regionName
+      regionName: this.regionName,
+      sessionToken: this.sessionToken
     };
     var client = this.clients.getClient(options);
     if (!client.connected) {
       client.connect(options);
     }
   };
+
+
+  AppController.prototype.signin = function() {
+    console.log("signin with email " + this.email);
+    this.initCognitoUserPool();
+    this.submitSignIn(
+      {
+        email: this.email,
+        password: this.password
+      }
+    )
+  };
+
+
+  AppController.prototype.initCognitoUserPool =  function() {
+    var poolData;
+    AWSCognito.config.region = 'us-west-2';
+    this.cognitoPoolId = 'us-west-2_QqWF8WUcK';
+    poolData = {
+      UserPoolId: this.cognitoPoolId,
+      ClientId: '70gkbkp976e2g7ij9glcj5g4b1',
+      Paranoia: 7
+    };
+    return this.cognitoUserPool = new AWSCognito.CognitoIdentityServiceProvider.CognitoUserPool(poolData);
+  }
+
+
+  AppController.prototype.getPopulatedLogins = function(values) {
+    var logins;
+    logins = {};
+    //logins["cognito-idp:us-west-2:193977405711:userpool/" + this.cognitoPoolId] = values.cognitoToken;
+    logins['cognito-idp.us-west-2.amazonaws.com/' + this.cognitoPoolId] = values.cognitoToken;
+    return logins;
+  }
+
+  AppController.prototype.getUserData = function() {
+    return this.retrieveAwsSession().then((function(_this) {
+      return function(response) {
+        return _this.getCognitoUserData().then(function(result) {
+          _this.deferred.resolve(_this);
+        });
+      };
+    })(this));
+  }
+
+  AppController.prototype.submitSignIn = function(user) {
+    var authenticationData, authenticationDetails, deferredInner, deferredToOuter, innerPromise, toOuterPromise, userData;
+    var $q = this.$q;
+    deferredInner = $q.defer();
+    deferredToOuter = $q.defer();
+    innerPromise = deferredInner.promise;
+    toOuterPromise = deferredToOuter.promise;
+    authenticationData = {
+      Username: user.email.toLocaleLowerCase(),
+      Password: user.password
+    };
+    authenticationDetails = new AWSCognito.CognitoIdentityServiceProvider.AuthenticationDetails(authenticationData);
+    userData = {
+      Username: user.email.toLocaleLowerCase(),
+      Pool: this.cognitoUserPool
+    };
+    this.cognitoUser = new AWSCognito.CognitoIdentityServiceProvider.CognitoUser(userData);
+    this.cognitoUser.authenticateUser(authenticationDetails, {
+      onSuccess: (function(_this) {
+        return function(result) {
+          return deferredInner.resolve(result);
+        };
+      })(this),
+      onFailure: function(err) {
+        return deferredInner.reject(err);
+      }
+    });
+    innerPromise.then((function(_this) {
+      return function(result) {
+        console.log("UserModel.submitSignIn promise.then()");
+
+
+        AWSCognito.config.credentials = new AWSCognito.CognitoIdentityCredentials({
+          IdentityPoolId: 'us-west-2:1f76ee12-c023-4d88-aa4f-91c0bef968e3',
+          Logins: {
+            'cognito-idp.us-west-2.amazonaws.com/us-west-2_QqWF8WUcK': result.getIdToken().getJwtToken()
+          }
+        });
+
+        AWSCognito.config.credentials.get((function(_this) {
+          return function() {
+            _this.identityId = AWSCognito.config.credentials.identityId;
+            _this.accessKey = AWSCognito.config.credentials.accessKeyId;
+            _this.secretKey = AWSCognito.config.credentials.secretAccessKey;
+            _this.sessionToken = AWSCognito.config.credentials.sessionToken;
+            _this.$timeout(function() {
+              return console.log("credentials received");
+            });
+          };
+        })(_this));
+
+        _this.authorizationAwsToken = _this.cognitoUser.signInUserSession.idToken.jwtToken;
+
+        return _this.getCognitoUserData().then(function() {
+          return deferredToOuter.resolve(result);
+        });
+      };
+    })(this))["catch"](function(error) {
+      console.error("cognitoUser.authenticateUser error:\n" + error.stack);
+      alert(error);
+      return deferredToOuter.reject(error);
+    });
+    return toOuterPromise;
+  }
+
+  AppController.prototype.retrieveAwsSession = function() {
+    var deferred, promise;
+    deferred = $q.defer();
+    promise = deferred.promise;
+    this.cognitoUser = this.cognitoUserPool.getCurrentUser();
+    if (this.cognitoUser !== null) {
+      this.cognitoUser.getSession((function(_this) {
+        return function(err, session) {
+          if (err) {
+            return deferred.reject(err);
+          } else {
+            return deferred.resolve(session);
+          }
+        };
+      })(this));
+    }
+    promise.then((function(_this) {
+      return function(session) {
+        AWSCognito.config.credentials = new AWSCognito.CognitoIdentityCredentials({
+          IdentityPoolId: _this.cognitoPoolId,
+          Logins: _this.getPopulatedLogins({
+            cognitoToken: session.getIdToken().getJwtToken()
+          })
+        });
+        return _this.authorizationAwsToken = _this.cognitoUser.signInUserSession.idToken.jwtToken;
+      };
+    })(this));
+    return promise;
+  }
+
+  AppController.prototype.getCognitoUserData = function() {
+    var deferred;
+    deferred = this.$q.defer();
+    this.cognitoUser.getUserAttributes((function(_this) {
+      return function(err, result) {
+        var attr, i, len;
+        if (err) {
+          console.error("getCognitoUserData error");
+          console.error(err);
+          return deferred.reject(err);
+        } else {
+          for (i = 0, len = result.length; i < len; i++) {
+            attr = result[i];
+            _this[attr.Name] = attr.Value;
+          }
+          _this.first_name = _this.given_name;
+          _this.last_name = _this.family_name;
+          _this.cognitoSessionIsValid = true;
+          return deferred.resolve(result);
+        }
+      };
+    })(this));
+    return deferred.promise;
+  }
 
   AppController.prototype.removeClient = function(clientCtr) {
     this.clients.removeClient(clientCtr);
@@ -150,31 +320,6 @@ or in the "license" file accompanying this file. This file is distributed on an 
     this.val.splice(index, 1);
   };
 
-
-  /**
-   * utilities to do sigv4
-   * @class SigV4Utils
-   */
-  function SigV4Utils(){}
-
-  SigV4Utils.sign = function(key, msg){
-    var hash = CryptoJS.HmacSHA256(msg, key);
-    return hash.toString(CryptoJS.enc.Hex);
-  };
-
-  SigV4Utils.sha256 = function(msg) {
-    var hash = CryptoJS.SHA256(msg);
-    return hash.toString(CryptoJS.enc.Hex);
-  };
-
-  SigV4Utils.getSignatureKey = function(key, dateStamp, regionName, serviceName) {
-    var kDate = CryptoJS.HmacSHA256(dateStamp, 'AWS4' + key);
-    var kRegion = CryptoJS.HmacSHA256(regionName, kDate);
-    var kService = CryptoJS.HmacSHA256(serviceName, kRegion);
-    var kSigning = CryptoJS.HmacSHA256('aws4_request', kService);
-    return kSigning;
-  };
-
   /**
   * AWS IOT MQTT Client
   * @class MQTTClient
@@ -227,32 +372,17 @@ or in the "license" file accompanying this file. This file is distributed on an 
     var secretKey = this.options.secretKey;
     var accessKey = this.options.accessKey;
     var algorithm = 'AWS4-HMAC-SHA256';
-    var method = 'GET';
-    var canonicalUri = '/mqtt';
+    var protocol = 'wss';
+    // var host = 'data.iot.us-west-2.amazonaws.com';
     var host = this.options.endpoint;
+    var canonicalUri = '/mqtt';
+    var sessionToken  = this.options.sessionToken;
 
-    var credentialScope = dateStamp + '/' + region + '/' + service + '/' + 'aws4_request';
-    var canonicalQuerystring = 'X-Amz-Algorithm=AWS4-HMAC-SHA256';
-    canonicalQuerystring += '&X-Amz-Credential=' + encodeURIComponent(accessKey + '/' + credentialScope);
-    canonicalQuerystring += '&X-Amz-Date=' + amzdate;
-    canonicalQuerystring += '&X-Amz-Expires=86400';
-    canonicalQuerystring += '&X-Amz-SignedHeaders=host';
+    //  function(protocol, host, uri, service, region, accessKey, secretKey, sessionToken)
+    var requestUrl = SigV4Utils.getSignedUrl(protocol, host, canonicalUri,
+      service, region, accessKey, secretKey, sessionToken);
 
-    var canonicalHeaders = 'host:' + host + '\n';
-    var payloadHash = SigV4Utils.sha256('');
-    var canonicalRequest = method + '\n' + canonicalUri + '\n' + canonicalQuerystring + '\n' + canonicalHeaders + '\nhost\n' + payloadHash;
-    console.log('canonicalRequest ' + canonicalRequest);
-
-    var stringToSign = algorithm + '\n' +  amzdate + '\n' +  credentialScope + '\n' +  SigV4Utils.sha256(canonicalRequest);
-    var signingKey = SigV4Utils.getSignatureKey(secretKey, dateStamp, region, service);
-    console.log('stringToSign-------');
-    console.log(stringToSign);
-    console.log('------------------');
-    console.log('signingKey ' + signingKey);
-    var signature = SigV4Utils.sign(signingKey, stringToSign);
-
-    canonicalQuerystring += '&X-Amz-Signature=' + signature;
-    var requestUrl = 'wss://' + host + canonicalUri + '?' + canonicalQuerystring;
+    console.log("v2 SigV4Utils requestUrl: " + requestUrl);
     return requestUrl;
   };
 
