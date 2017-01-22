@@ -10,7 +10,7 @@ or in the "license" file accompanying this file. This file is distributed on an 
 (function() {
   'use strict';
 
-  function LogMsg(type, content){
+  function LogMsg(type, content) {
     this.type = type;
     this.content = content;
     this.createdTime = Date.now();
@@ -21,16 +21,16 @@ or in the "license" file accompanying this file. This file is distributed on an 
     }
   }
 
-  function LogService(){
+  function LogService() {
     this.logs = [];
   }
 
-  LogService.prototype.log = function(msg) {
+  LogService.prototype.log = function (msg) {
     var logObj = new LogMsg('success', msg);
     this.logs.push(logObj);
   };
 
-  LogService.prototype.logError = function(msg) {
+  LogService.prototype.logError = function (msg) {
     var logObj = new LogMsg('error', msg);
     this.logs.push(logObj);
   };
@@ -48,7 +48,7 @@ or in the "license" file accompanying this file. This file is distributed on an 
   }
 
   /** controller of the app */
-  function AppController(scope, $q, $timeout){
+  function AppController(scope, $q, $timeout) {
     this.email = '';
     this.password = 'X';
     this.clientId = 'X';
@@ -61,13 +61,38 @@ or in the "license" file accompanying this file. This file is distributed on an 
     this.clients = new ClientControllerCache(scope, this.logs);
     this.$q = $q;
     this.$timeout = $timeout;
+    this.$scope = scope;
   }
 
   AppController.$inject = ['$scope', '$q', '$timeout'];
 
-  AppController.prototype.createClient = function() {
+
+  AppController.prototype.computeUrl = function (options) {
+    // must use utc time
+    // var time = moment.utc();
+    // var dateStamp = time.format('YYYYMMDD');
+    // var amzdate = dateStamp + 'T' + time.format('HHmmss') + 'Z';
+    // var algorithm = 'AWS4-HMAC-SHA256';
+
+    var protocol = 'wss';
+    var host = options.endpoint;
+    var canonicalUri = '/mqtt';
+    var service = 'iotdevicegateway';
+    var region = options.regionName;
+    var accessKey = options.accessKey;
+    var secretKey = options.secretKey;
+    var sessionToken = options.sessionToken;
+
+    var requestUrl = SigV4Utils.getSignedUrl(protocol, host, canonicalUri,
+      service, region, accessKey, secretKey, sessionToken);
+
+    console.log("v2 SigV4Utils requestUrl: " + requestUrl);
+    return requestUrl;
+  };
+
+  AppController.prototype.createClientPaho = function () {
     var options = {
-      clientId : this.clientId,
+      clientId: this.clientId,
       endpoint: this.endpoint.toLowerCase(),
       accessKey: this.accessKey,
       secretKey: this.secretKey,
@@ -78,6 +103,23 @@ or in the "license" file accompanying this file. This file is distributed on an 
     if (!client.connected) {
       client.connect(options);
     }
+  };
+
+  AppController.prototype.createClientMqtt = function () {
+    var options = {
+      clientId: this.clientId,
+      endpoint: this.endpoint.toLowerCase(),
+      accessKey: this.accessKey,
+      secretKey: this.secretKey,
+      regionName: this.regionName,
+      sessionToken: this.sessionToken,
+      type: "mqtt.js"
+    };
+    options.mqttSvrUrl = this.computeUrl(options);
+    this.mqttSvrUrl = options.mqttSvrUrl;
+
+    this.client = this.clients.getClient(options);
+    this.client.scope = this.$scope;
   };
 
 
@@ -251,31 +293,68 @@ or in the "license" file accompanying this file. This file is distributed on an 
   // would be better to use a seperate derective
   function ClientController(client, logs) {
     this.client = client;
-    this.topicName = 'seattle/traffic';
+    this.topicName = 'emails/abc';
     this.message = null;
     this.msgs = [];
     this.logs = logs;
     var self = this;
 
-    this.client.on('connectionLost', function(){
-      self.logs.logError('Connection lost');
-    });
-    this.client.on('messageArrived', function(msg){
-      self.logs.log('messageArrived in ' + self.id);
-      self.msgs.push(new ReceivedMsg(msg));
-    });
-    this.client.on('connected', function(){
-      self.logs.log('connected');
-    });
-    this.client.on('subscribeFailed', function(e){
-      self.logs.logError('subscribeFailed ' + e);
-    });
-    this.client.on('subscribeSucess', function(){
-      self.logs.log('subscribeSucess');
-    });
-    this.client.on('publishFailed', function(e){
-      self.logs.log('publishFailed');
-    });
+    switch (this.client.constructor.name) {
+      case "MqttClient":  // MQTT.js client
+
+        this.client.on('connectionLost', function () {
+          self.logs.logError('Connection lost');
+        });
+        this.client.on('message',
+          (function(client) {
+            return (function (topic, payload) {
+                var msg = {
+                  payloadString: payload.toString(),
+                  destinationName: topic
+                };
+                self.logs.log('message in ' + topic);
+                self.msgs.push(new ReceivedMsg(msg));
+                client.scope.$digest()
+            });
+          })(this.client)
+        );
+        this.client.on('connected', function () {
+          self.logs.log('connected');
+        });
+        this.client.on('subscribeFailed', function (e) {
+          self.logs.logError('subscribeFailed ' + e);
+        });
+        this.client.on('subscribeSucess', function () {
+          self.logs.log('subscribeSucess');
+        });
+        this.client.on('publishFailed', function (e) {
+          self.logs.log('publishFailed');
+        });
+        break;
+
+      case "MQTTClient":  // Paho MQTT client
+
+        this.client.on('connectionLost', function () {
+          self.logs.logError('Connection lost');
+        });
+        this.client.on('messageArrived', function (msg) {
+          self.logs.log('messageArrived in ' + self.id);
+          self.msgs.push(new ReceivedMsg(msg));
+        });
+        this.client.on('connected', function () {
+          self.logs.log('connected');
+        });
+        this.client.on('subscribeFailed', function (e) {
+          self.logs.logError('subscribeFailed ' + e);
+        });
+        this.client.on('subscribeSucess', function () {
+          self.logs.log('subscribeSucess');
+        });
+        this.client.on('publishFailed', function (e) {
+          self.logs.log('publishFailed');
+        });
+    }
+
   }
 
   ClientController.prototype.subscribe = function() {
@@ -307,7 +386,11 @@ or in the "license" file accompanying this file. This file is distributed on an 
         return ctr.client;
       }
     }
-    var client =  new MQTTClient(options, this.scope);
+    if(options.type === "mqtt.js"){
+      var client = mqtt.connect(options.mqttSvrUrl);
+    }else{
+      var client =  new MQTTClient(options, this.scope);
+    }
     var clientController = new ClientController(client, this.logs);
     clientController.id = id;
     this.val.push(clientController);
@@ -382,7 +465,7 @@ or in the "license" file accompanying this file. This file is distributed on an 
     var requestUrl = SigV4Utils.getSignedUrl(protocol, host, canonicalUri,
       service, region, accessKey, secretKey, sessionToken);
 
-    console.log("v2 SigV4Utils requestUrl: " + requestUrl);
+    // console.log("v2 SigV4Utils requestUrl: " + requestUrl);
     return requestUrl;
   };
 

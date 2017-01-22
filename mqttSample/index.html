@@ -25,12 +25,16 @@
           <button class="btn btn-primary" ng-click="vm.signin()" ng-disabled="!vm.email || !vm.password">Sign in</button>
         </div>
         <div class="form-group">
-          <p>Cognito user name: {{vm.first_name}} {{vm.last_name}}</p>
-          <p>Cognito identityId: {{vm.identityId}}</p>
-          <p>Cognito accessKey: {{vm.accessKey}}</p>
-          <p>Cognito secretKey: {{vm.secretKey}}</p>
-          <p>Cognito sessionToken: {{vm.sessionToken}}</p>
+          <p>Cognito user name: {{vm.first_name}} {{vm.last_name}}  identityId: {{vm.identityId}}</p>
         </div>
+        <!--<div class="form-group">-->
+          <!--<p>Cognito user name: {{vm.first_name}} {{vm.last_name}}  identityId: {{vm.identityId}}</p>-->
+          <!--<p>Cognito user name: {{vm.first_name}} {{vm.last_name}}</p>-->
+          <!--<p>Cognito identityId: {{vm.identityId}}</p>-->
+          <!--<p>Cognito accessKey: {{vm.accessKey}}</p>-->
+          <!--<p>Cognito secretKey: {{vm.secretKey}}</p>-->
+          <!--<p>Cognito sessionToken: {{vm.sessionToken}}</p>-->
+        <!--</div>-->
 
       </div>
     </div>
@@ -62,7 +66,8 @@
     </div>
     <div class="row">
       <div class="form-group">
-        <button class="btn btn-primary" ng-click="vm.createClient()" ng-disabled="!vm.accessKey || !vm.secretKey">Create Client</button>
+        <button class="btn btn-primary" ng-click="vm.createClientPaho()" ng-disabled="!vm.accessKey || !vm.secretKey">Create Client Paho</button>
+        <button class="btn btn-primary" ng-click="vm.createClientMqtt()" ng-disabled="!vm.accessKey || !vm.secretKey">Create Client MQTT</button>
       </div>
     </div>
     <div class="panel panel-info" ng-repeat="clientCtr in vm.clients.val">
@@ -108,6 +113,10 @@
   <script type="text/javascript" src="./bower_components/moment/min/moment.min.js"></script>
   <script type="text/javascript" src="./bower_components/angular/angular.min.js"></script>
   <script type="text/javascript" src="./bower_components/paho-mqtt-js/mqttws31.js"></script>
+
+  <script type="text/javascript" src="./js/browserMqtt.js"></script>
+
+
   <script type="text/javascript" src="./bower_components/cryptojslib/rollups/sha256.js"></script>
   <script type="text/javascript" src="./bower_components/cryptojslib/rollups/hmac-sha256.js"></script>
 
