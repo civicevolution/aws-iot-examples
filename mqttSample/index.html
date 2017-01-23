@@ -66,8 +66,8 @@
     </div>
     <div class="row">
       <div class="form-group">
-        <button class="btn btn-primary" ng-click="vm.createClientPaho()" ng-disabled="!vm.accessKey || !vm.secretKey">Create Client Paho</button>
-        <button class="btn btn-primary" ng-click="vm.createClientMqtt()" ng-disabled="!vm.accessKey || !vm.secretKey">Create Client MQTT</button>
+        <!--<button class="btn btn-primary" ng-click="vm.createClientPaho()" ng-disabled="!vm.accessKey || !vm.secretKey">Create Client Paho</button>-->
+        <button class="btn btn-primary" ng-click="vm.createClientMqtt()" ng-disabled="!vm.accessKey || !vm.secretKey">Create Client</button>
       </div>
     </div>
     <div class="panel panel-info" ng-repeat="clientCtr in vm.clients.val">
@@ -83,7 +83,7 @@
               <label for="topicInput">Topic: </label>
               <input type="text" class="form-control" id="topicInput" placeholder="Topic" ng-model="clientCtr.topicName" />
             </div>
-            <button class="btn btn-primary" ng-click="clientCtr.subscribe()">Subscribe</button>
+            <button class="btn btn-primary" ng-click="clientCtr.subscribe()" XXng-disabled="!vm.client.connected">Subscribe</button>
           </div>
           <div>
             <p>Press enter in the text box to send message to topic : {{clientCtr.topicName}} </p>

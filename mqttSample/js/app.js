@@ -90,21 +90,6 @@ or in the "license" file accompanying this file. This file is distributed on an 
     return requestUrl;
   };
 
-  AppController.prototype.createClientPaho = function () {
-    var options = {
-      clientId: this.clientId,
-      endpoint: this.endpoint.toLowerCase(),
-      accessKey: this.accessKey,
-      secretKey: this.secretKey,
-      regionName: this.regionName,
-      sessionToken: this.sessionToken
-    };
-    var client = this.clients.getClient(options);
-    if (!client.connected) {
-      client.connect(options);
-    }
-  };
-
   AppController.prototype.createClientMqtt = function () {
     var options = {
       clientId: this.clientId,
@@ -299,70 +284,126 @@ or in the "license" file accompanying this file. This file is distributed on an 
     this.logs = logs;
     var self = this;
 
-    switch (this.client.constructor.name) {
-      case "MqttClient":  // MQTT.js client
+    this.client.on('connectionLost', function () {
+      self.logs.logError('Connection lost');
+    });
 
-        this.client.on('connectionLost', function () {
-          self.logs.logError('Connection lost');
+    this.client.on('message',
+      (function(client) {
+        return (function (topic, payload) {
+            var msg = {
+              payloadString: payload.toString(),
+              destinationName: topic
+            };
+            self.logs.log('message in ' + topic);
+            self.msgs.push(new ReceivedMsg(msg));
+            client.scope.$digest()
         });
-        this.client.on('message',
-          (function(client) {
-            return (function (topic, payload) {
-                var msg = {
-                  payloadString: payload.toString(),
-                  destinationName: topic
-                };
-                self.logs.log('message in ' + topic);
-                self.msgs.push(new ReceivedMsg(msg));
-                client.scope.$digest()
-            });
-          })(this.client)
-        );
-        this.client.on('connected', function () {
-          self.logs.log('connected');
-        });
-        this.client.on('subscribeFailed', function (e) {
-          self.logs.logError('subscribeFailed ' + e);
-        });
-        this.client.on('subscribeSucess', function () {
-          self.logs.log('subscribeSucess');
-        });
-        this.client.on('publishFailed', function (e) {
-          self.logs.log('publishFailed');
-        });
-        break;
+      })(this.client)
+    );
 
-      case "MQTTClient":  // Paho MQTT client
+    this.client.on('error', function (arg) {
+      self.logs.log('error');
+      console.log('error');
+      console.log(arg);
+    });
 
-        this.client.on('connectionLost', function () {
-          self.logs.logError('Connection lost');
-        });
-        this.client.on('messageArrived', function (msg) {
-          self.logs.log('messageArrived in ' + self.id);
-          self.msgs.push(new ReceivedMsg(msg));
-        });
-        this.client.on('connected', function () {
-          self.logs.log('connected');
-        });
-        this.client.on('subscribeFailed', function (e) {
-          self.logs.logError('subscribeFailed ' + e);
-        });
-        this.client.on('subscribeSucess', function () {
-          self.logs.log('subscribeSucess');
-        });
-        this.client.on('publishFailed', function (e) {
-          self.logs.log('publishFailed');
-        });
-    }
+    this.client.on('close', function (arg) {
+      self.logs.log('close');
+      console.log('close');
+      console.log(arg);
+    });
+
+    this.client.on('offline', function (arg) {
+      self.logs.log('offline');
+      console.log('offline');
+      console.log(arg);
+    });
+
+    this.client.on('connect', function (packet) {
+      self.logs.log('connect');
+      console.log('connect');
+      console.log(packet);
+    });
+
+    this.client.on('reconnect', function (arg) {
+      self.logs.log('reconnect');
+      console.log('reconnect');
+      console.log(arg);
+    });
+
+    this.client.on('subscribeFailed', function (e) {
+      self.logs.logError('subscribeFailed ' + e);
+    });
+
+    this.client.on('subscribeSuccess', function (resp) {
+      self.logs.log('Successfully subscribed to ' + resp.topics);
+      console.log(resp);
+    });
+
+    this.client.on('publishFailed', function (e) {
+      self.logs.log('publishFailed');
+    });
 
   }
 
   ClientController.prototype.subscribe = function() {
-    this.client.subscribe(this.topicName);
+    try{
+      this.client.subscribe(
+        this.topicName,
+          (function(client) {
+            return (function(err,pass){
+              if(err){
+                console.log("error in subscribe for client");
+                console.log(err);
+                console.log(client);
+                client.emit("subscribeFailed");
+                client.scope.$digest();
+              }else if(pass){
+                console.log("okay in subscribe for client");
+                console.log(pass);
+                console.log(client);
+                var topics = (function() {
+                  var i, len, results;
+                  results = [];
+                  for (i = 0, len = pass.length; i < len; i++) {
+                    var o = pass[i];
+                    results.push(o.topic);
+                  }
+                  return results;
+                })();
+
+                client.emit("subscribeSuccess", {topics: topics.join("\n") });
+                client.scope.$digest();
+              }
+            });
+          })(this.client)
+      );
+    }catch(e) {
+      this.client.emit('subscribeFailed', e);
+    }
   };
 
   ClientController.prototype.publish = function() {
-    this.client.publish(this.topicName, this.message);
+    this.client.publish(
+      this.topicName,
+      this.message,
+      {},
+      (function(client) {
+        return (function(err){
+          if(err){
+            console.log("error in publish for client");
+            console.log(err);
+            console.log(client);
+            client.emit("publishFailed");
+            client.scope.$digest();
+          }
+        });
+      })(this.client)
+    );
+    //   } catch (e) {
+    //     this.emit('publishFailed', e);
+    //   }
   };
 
   ClientController.prototype.msgInputKeyUp = function($event) {
@@ -401,174 +442,6 @@ or in the "license" file accompanying this file. This file is distributed on an 
     clientCtr.client.disconnect();
     var index = this.val.indexOf(clientCtr);
     this.val.splice(index, 1);
-  };
-
-  /**
-  * AWS IOT MQTT Client
-  * @class MQTTClient
-  * @param {Object} options - the client options
-  * @param {string} options.endpoint
-  * @param {string} options.regionName
-  * @param {string} options.accessKey
-  * @param {string} options.secretKey
-  * @param {string} options.clientId
-  * @param {angular.IScope}  [scope]  - the angular scope used to trigger UI re-paint, you can
-  omit this if you are not using angular
-  */
-  function MQTTClient(options, scope){
-    this.options = options;
-    this.scope = scope;
-
-    this.endpoint = this.computeUrl();
-    this.clientId = options.clientId;
-    this.name = this.clientId + '@' + options.endpoint;
-    this.connected = false;
-    this.client = new Paho.MQTT.Client(this.endpoint, this.clientId);
-    this.listeners = {};
-    var self = this;
-    this.client.onConnectionLost = function() {
-      self.emit('connectionLost');
-      self.connected = false;
-    };
-    this.client.onMessageArrived = function(msg) {
-      self.emit('messageArrived', msg);
-    };
-    this.on('connected', function(){
-      self.connected = true;
-    });
-  }
-
-  /**
-   * compute the url for websocket connection
-   * @private
-   *
-   * @method     MQTTClient#computeUrl
-   * @return     {string}  the websocket url
-   */
-  MQTTClient.prototype.computeUrl = function(){
-    // must use utc time
-    var time = moment.utc();
-    var dateStamp = time.format('YYYYMMDD');
-    var amzdate = dateStamp + 'T' + time.format('HHmmss') + 'Z';
-    var service = 'iotdevicegateway';
-    var region = this.options.regionName;
-    var secretKey = this.options.secretKey;
-    var accessKey = this.options.accessKey;
-    var algorithm = 'AWS4-HMAC-SHA256';
-    var protocol = 'wss';
-    // var host = 'data.iot.us-west-2.amazonaws.com';
-    var host = this.options.endpoint;
-    var canonicalUri = '/mqtt';
-    var sessionToken  = this.options.sessionToken;
-
-    //  function(protocol, host, uri, service, region, accessKey, secretKey, sessionToken)
-    var requestUrl = SigV4Utils.getSignedUrl(protocol, host, canonicalUri,
-      service, region, accessKey, secretKey, sessionToken);
-
-    // console.log("v2 SigV4Utils requestUrl: " + requestUrl);
-    return requestUrl;
-  };
-
-  /**
-  * listen to client event, supported events are connected, connectionLost,
-  * messageArrived(event parameter is of type Paho.MQTT.Message), publishFailed,
-  * subscribeSucess and subscribeFailed
-  * @method     MQTTClient#on
-  * @param      {string}  event
-  * @param      {Function}  handler
-  */
-  MQTTClient.prototype.on = function(event, handler) {
-    if (!this.listeners[event]) {
-      this.listeners[event] = [];
-    }
-    this.listeners[event].push(handler);
-  };
-
-  /** emit event
-   *
-   * @method MQTTClient#emit
-   * @param {string}  event
-   * @param {...any} args - event parameters
-   */
-  MQTTClient.prototype.emit = function(event) {
-    var listeners = this.listeners[event];
-    if (listeners) {
-      var args = Array.prototype.slice.apply(arguments, [1]);
-      for (var i = 0; i < listeners.length; i++) {
-        var listener = listeners[i];
-        listener.apply(null, args);
-      }
-      // make angular to repaint the ui, remove these if you don't use angular
-      if(this.scope && !this.scope.$$phase) {
-        this.scope.$digest();
-      }
-    }
-  };
-
-  /**
-   * connect to AWS, should call this method before publish/subscribe
-   * @method MQTTClient#connect
-   */
-  MQTTClient.prototype.connect = function() {
-    var self = this;
-    var connectOptions = {
-      onSuccess: function(){
-        self.emit('connected');
-      },
-      useSSL: true,
-      timeout: 3,
-      mqttVersion:4,
-      onFailure: function() {
-        self.emit('connectionLost');
-      }
-    };
-    this.client.connect(connectOptions);
-  };
-
-  /**
-   * disconnect
-   * @method MQTTClient#disconnect
-   */
-  MQTTClient.prototype.disconnect = function() {
-    this.client.disconnect();
-  };
-
-  /**
-   * publish a message
-   * @method     MQTTClient#publish
-   * @param      {string}  topic
-   * @param      {string}  payload
-   */
-  MQTTClient.prototype.publish = function(topic, payload) {
-    try {
-      var message = new Paho.MQTT.Message(payload);
-      message.destinationName = topic;
-      this.client.send(message);
-    } catch (e) {
-      this.emit('publishFailed', e);
-    }
-  };
-
-  /**
-   * subscribe to a topic
-   * @method     MQTTClient#subscribe
-   * @param      {string}  topic
-   */
-  MQTTClient.prototype.subscribe = function(topic) {
-    var self = this;
-    try{
-      this.client.subscribe(topic, {
-        onSuccess: function(){
-          self.emit('subscribeSucess');
-        },
-        onFailure: function(){
-          self.emit('subscribeFailed');
-        }
-      });
-    }catch(e) {
-      this.emit('subscribeFailed', e);
-    }
-
   };
 
   angular.module('awsiot.sample', []).controller('AppController', AppController);
